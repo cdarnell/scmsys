@@ -14,6 +14,19 @@ providers:
         pluginId: prometheus
         type: datasource
         value: Prometheus
+  - name: At A Glance Dashboards
+    folder: At A Glance
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/aag
+    inputs:
+      - name: DS_PROMETHEUS
+        pluginId: prometheus
+        type: datasource
+        value: Prometheus
   - name: Ollama Dashboards
     folder: Ollama
     type: file

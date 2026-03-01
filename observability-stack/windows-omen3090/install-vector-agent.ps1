@@ -1,10 +1,11 @@
 param(
-    [string]$VectorVersion = "0.42.0",
-    [string]$Hostname = "omen3090",
-    [string]$AggregatorHost = "host.docker.internal",
-    [int]$AggregatorPort = 6000,
-    [string[]]$EventChannels = @("Application", "System"),
-    [switch]$Force
+  [string]$VectorVersion = "0.42.0",
+  [string]$Hostname = "omen3090",
+  [string]$AggregatorHost = "host.docker.internal",
+  [int]$AggregatorPort = 6000,
+  [int]$AggregatorLogPort = 6001,
+  [string[]]$EventChannels = @("Application", "System"),
+  [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +23,10 @@ if (-not $Force) {
 }
 
 $msiName = "vector-$VectorVersion-x86_64.msi"
-$downloadUrl = "https://packages.timber.io/vector/$VectorVersion/vector-x86_64-pc-windows-msvc.msi"
+$downloadCandidates = @(
+  "https://packages.timber.io/vector/$VectorVersion/vector-x86_64-pc-windows-msvc.msi",
+  "https://packages.timber.io/vector/$VectorVersion/vector-$VectorVersion-x86_64-pc-windows-msvc.msi"
+)
 $tmpDir = Join-Path $env:TEMP "vector-installer"
 $msiPath = Join-Path $tmpDir $msiName
 
@@ -31,7 +35,23 @@ if (-not (Test-Path $tmpDir)) {
 }
 
 Write-Host "Downloading Vector $VectorVersion ..."
-Invoke-WebRequest -Uri $downloadUrl -OutFile $msiPath -UseBasicParsing
+$downloadSucceeded = $false
+$downloadUrl = $null
+foreach ($candidate in $downloadCandidates) {
+  try {
+    Write-Host "Attempting download from $candidate"
+    Invoke-WebRequest -Uri $candidate -OutFile $msiPath -UseBasicParsing
+    $downloadUrl = $candidate
+    $downloadSucceeded = $true
+    break
+  } catch {
+    Write-Warning "Download failed from $candidate: $($_.Exception.Message)"
+  }
+}
+
+if (-not $downloadSucceeded) {
+  throw "Unable to download Vector $VectorVersion MSI. Update the download URL list or choose a version that is still hosted."
+}
 
 $msiArgs = @(
     '/i', "`"$msiPath`"",
@@ -88,20 +108,20 @@ if exists(.record) && exists(.record.Channel) {
 }
 .level = level_val
 .channel = channel_val
+.host = "${Hostname}"
 '''
 
-[transforms.windows_event_metrics]
-type = "log_to_metric"
-inputs = ["windows_event_labels"]
-metrics = [
-  { type = "counter", name = "windows_event_logs_total", field = "message", tags = { channel = "{{channel}}", level = "{{level}}", host = "${Hostname}" } },
-  { type = "counter", name = "windows_event_errors_total", field = "message", tags = { channel = "{{channel}}", host = "${Hostname}" }, condition = ".level == \"Error\" || .level == \"Critical\"" }
-]
-
-[sinks.aggregate]
+[sinks.aggregate_metrics]
 type = "vector"
-inputs = ["host_metrics_tagged", "windows_event_metrics"]
+inputs = ["host_metrics_tagged"]
 address = "${AggregatorHost}:${AggregatorPort}"
+version = "2"
+healthcheck.enabled = true
+
+[sinks.aggregate_windows_logs]
+type = "vector"
+inputs = ["windows_event_labels"]
+address = "${AggregatorHost}:${AggregatorLogPort}"
 version = "2"
 healthcheck.enabled = true
 "@
@@ -117,5 +137,5 @@ if (Get-Service -Name 'vector' -ErrorAction SilentlyContinue) {
     Start-Service -Name 'vector'
 }
 
-Write-Host "Vector agent installed and streaming metrics to ${AggregatorHost}:${AggregatorPort}."
+Write-Host "Vector agent installed and streaming metrics to ${AggregatorHost}:${AggregatorPort} and logs to ${AggregatorHost}:${AggregatorLogPort}."
 Write-Host "Config path: $configPath"

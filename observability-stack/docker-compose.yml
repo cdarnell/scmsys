@@ -49,12 +49,14 @@ services:
     user: "0:0"
     environment:
       VECTOR_LOG: info
+      VECTOR_CONFIG: /etc/vector/vector.toml
     volumes:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - vector-data:/var/lib/vector
     ports:
       - "6000:6000"
+      - "6001:6001"
     expose:
       - "9598"
       - "8686"

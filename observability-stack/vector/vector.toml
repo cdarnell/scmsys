@@ -7,7 +7,6 @@ playground = false
 
 [sources.docker_logs]
 type = "docker_logs"
-message_key = "message"
 exclude_containers = [
   "observability-vector",
   "observability-prometheus",
@@ -19,6 +18,11 @@ type = "vector"
 address = "0.0.0.0:6000"
 version = "2"
 
+[sources.windows_event_ingest]
+type = "vector"
+address = "0.0.0.0:6001"
+version = "2"
+
 [sources.internal_metrics]
 type = "internal_metrics"
 
@@ -28,22 +32,22 @@ inputs = ["docker_logs"]
 source = '''
 .container = .container_name
 if exists(.container) {
-  .container = replace(.container, r"^/", "")
+  .container = replace!(.container, r'^/', "")
 }
 .image = .image
-.message = to_string(.message)
+.message = to_string!(.message)
 structured, err = parse_json(.message)
 if err == null && is_object(structured) {
   if exists(structured.level) {
-    .level = downcase(to_string(structured.level))
+    .level = downcase(to_string!(structured.level))
   }
   if exists(structured.msg) {
-    .message = to_string(structured.msg)
+    .message = to_string!(structured.msg)
   } else if exists(structured.message) {
-    .message = to_string(structured.message)
+    .message = to_string!(structured.message)
   }
   if exists(structured.target) {
-    .target = to_string(structured.target)
+    .target = to_string!(structured.target)
   }
 }
 if !exists(.level) {
@@ -54,21 +58,24 @@ if !exists(.level) {
 [transforms.docker_log_metrics]
 type = "log_to_metric"
 inputs = ["normalize_docker_logs"]
-metrics = [
-  {
-    type = "counter",
-    name = "zeroclaw_log_events_total",
-    field = "message",
-    tags = { container = "{{container}}", level = "{{level}}", image = "{{image}}" }
-  },
-  {
-    type = "counter",
-    name = "zeroclaw_log_errors_total",
-    field = "message",
-    tags = { container = "{{container}}", image = "{{image}}" },
-    condition = ".level == \"error\" || .level == \"fatal\""
-  }
-]
+
+[[transforms.docker_log_metrics.metrics]]
+type = "counter"
+name = "zeroclaw_log_events_total"
+field = "message"
+[transforms.docker_log_metrics.metrics.tags]
+container = "{{container}}"
+level = "{{level}}"
+image = "{{image}}"
+
+[[transforms.docker_log_metrics.metrics]]
+type = "counter"
+name = "zeroclaw_log_errors_total"
+field = "message"
+condition = '.level == "error" || .level == "fatal"'
+[transforms.docker_log_metrics.metrics.tags]
+container = "{{container}}"
+image = "{{image}}"
 
 [transforms.windows_metrics_enrich]
 type = "remap"
@@ -82,11 +89,71 @@ if .tags.host == null && .hostname != null {
 }
 '''
 
+[transforms.normalize_windows_logs]
+type = "remap"
+inputs = ["windows_event_ingest"]
+source = '''
+host_val = "windows_host"
+if exists(.host) && .host != null {
+  host_val = to_string!(.host)
+} else if exists(.hostname) && .hostname != null {
+  host_val = to_string!(.hostname)
+} else if exists(.tags) && is_object(.tags) && exists(.tags.host) && .tags.host != null {
+  host_val = to_string!(.tags.host)
+}
+.host = host_val
+
+channel_val = "Application"
+if exists(.channel) && .channel != null {
+  channel_val = to_string!(.channel)
+} else if exists(.record) && is_object(.record) && exists(.record.Channel) && .record.Channel != null {
+  channel_val = to_string!(.record.Channel)
+}
+.channel = channel_val
+
+level_val = "information"
+if exists(.level) && .level != null {
+  level_val = downcase(to_string!(.level))
+} else if exists(.record) && is_object(.record) && exists(.record.LevelDisplayName) && .record.LevelDisplayName != null {
+  level_val = downcase(to_string!(.record.LevelDisplayName))
+}
+.level = level_val
+
+if exists(.message) && .message != null {
+  .message = to_string!(.message)
+} else if exists(.record) && is_object(.record) && exists(.record.Message) && .record.Message != null {
+  .message = to_string!(.record.Message)
+} else {
+  .message = ""
+}
+'''
+
+[transforms.windows_log_metrics]
+type = "log_to_metric"
+inputs = ["normalize_windows_logs"]
+
+[[transforms.windows_log_metrics.metrics]]
+type = "counter"
+name = "windows_event_logs_total"
+field = "message"
+[transforms.windows_log_metrics.metrics.tags]
+host = "{{host}}"
+channel = "{{channel}}"
+level = "{{level}}"
+
+[[transforms.windows_log_metrics.metrics]]
+type = "counter"
+name = "windows_event_errors_total"
+field = "message"
+condition = '.level == "error" || .level == "critical"'
+[transforms.windows_log_metrics.metrics.tags]
+host = "{{host}}"
+channel = "{{channel}}"
+
 [sinks.prometheus_exporter]
 type = "prometheus_exporter"
-inputs = ["docker_log_metrics", "windows_metrics_enrich", "internal_metrics"]
+inputs = ["docker_log_metrics", "windows_metrics_enrich", "windows_log_metrics", "internal_metrics"]
 address = "0.0.0.0:9598"
-normalize_labels = true
 default_namespace = "observability"
 
 [sinks.loki_logs]
@@ -98,6 +165,18 @@ labels.job = "zeroclaw"
 labels.container = "{{container}}"
 labels.level = "{{level}}"
 labels.image = "{{image}}"
+out_of_order_action = "accept"
+healthcheck.enabled = true
+
+[sinks.loki_windows_logs]
+type = "loki"
+inputs = ["normalize_windows_logs"]
+endpoint = "http://loki:3100"
+encoding.codec = "json"
+labels.job = "windows_events"
+labels.host = "{{host}}"
+labels.channel = "{{channel}}"
+labels.level = "{{level}}"
 out_of_order_action = "accept"
 healthcheck.enabled = true
 
