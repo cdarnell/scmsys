@@ -94,17 +94,25 @@ try {
         timestamp_utc = (Get-Date).ToUniversalTime().ToString('o')
     }
     # Remove empty values to keep payload tidy
-    $payload.Keys | Where-Object { -not $payload[$_] } | ForEach-Object { [void]$payload.Remove($_) }
+    foreach ($key in @($payload.Keys)) {
+        if (-not $payload[$key]) {
+            [void]$payload.Remove($key)
+        }
+    }
     $payloadJson = ($payload | ConvertTo-Json -Depth 3 -Compress)
 
     $pairLines = Invoke-ComposeCommand -ComposeArgs 'exec', 'gateway', 'curl', '-sS', '-X', 'POST', 'http://127.0.0.1:3000/pair', '-H', "X-Pairing-Code: $pairingCode", '-H', 'Content-Type: application/json', '-d', $payloadJson
     $pairResponse = Convert-LastJsonLine -Lines $pairLines
 
-    if (-not $pairResponse.bearer_token) {
-        throw 'Gateway response did not include a bearer_token field.'
+    $token = $null
+    if ($pairResponse.PSObject.Properties['bearer_token']) {
+        $token = $pairResponse.bearer_token
+    } elseif ($pairResponse.PSObject.Properties['token']) {
+        $token = $pairResponse.token
     }
-
-    $token = $pairResponse.bearer_token
+    if (-not $token) {
+        throw 'Gateway response did not include a bearer_token/token field.'
+    }
     Write-Host "New bearer token issued:" -ForegroundColor Green
     Write-Host $token
 
