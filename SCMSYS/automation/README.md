@@ -1,5 +1,4 @@
 automation/
-automation/
 # Automation
 
 Align home stack and claws. This repo glues together the ZeroClaw runtime, the observability stack, and the Oracle Cloud automation helpers so the entire environment can be reproduced (and secured) on demand.
@@ -7,17 +6,18 @@ Align home stack and claws. This repo glues together the ZeroClaw runtime, the o
 ## Repo Layout
 
 ```
-SCMSYS/projects/automation/
-├── README.md                  # You are here
-├── zeroclaw/                  # Upstream ZeroClaw runtime and docs snapshot
-├── observability-stack/       # Prometheus + Grafana (Docker compose)
-├── terraform/                 # OCI IaC for an Ampere A1 Flex host
-└── scripts/                   # Helper scripts (retry loop, bootstrap, etc.)
+SCMSYS/
+├── automation/                # You are here
+│   ├── README.md
+│   ├── observability-stack/
+│   ├── terraform/
+│   └── scripts/
+└── zeroclaw/                  # Full ZeroClaw runtime snapshot (sibling project)
 ```
 
 ## Components at a Glance
 
-- **ZeroClaw** – Canonical source tree plus deploy helpers so agents stay reproducible.
+- **ZeroClaw** – Canonical source tree now lives in the sibling folder `SCMSYS/zeroclaw` so the upstream runtime is versioned independently while still kept in this repo.
 - **Observability Stack** – Docker Compose bundle with Prometheus, Grafana, dashboards for ZeroClaw/Ollama/Windows exporters, and provisioning rules baked in.
 - **OCI Automation Helpers** – Terraform + cloud-init + a retry loop that keep nudging OCI until free-tier Ampere capacity appears, hardened with NSGs and optional Tailscale bootstrap.
 
