@@ -10,6 +10,17 @@ terraform/crash.log
 
 # Local env secrets
 .env
+vault/.env
+vault/init.txt
+vault/.approle/
+vault/data/
+vault/file/
+
+# Vault Terraform state
+vault/terraform/.terraform/
+vault/terraform/.terraform.lock.hcl
+vault/terraform/terraform.tfstate
+vault/terraform/terraform.tfstate.*
 
 # OS junk
 *.log

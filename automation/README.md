@@ -113,6 +113,39 @@ The Terraform plan creates a dedicated Network Security Group (NSG) per instance
 
 INTERVAL=30 MAX_ATTEMPTS=120 ./scripts/retry-terraform.sh
 
+## Secret management with HashiCorp Vault
+
+All tokens and API keys now live in `automation/vault`. The folder includes a Docker Compose file for a single-node Vault, a hardened config, and Terraform that sets up the KV v2 engine plus AppRoles (`zeroclaw-runtime` and `automation-terraform`).
+
+1. `cd automation/vault && docker compose up -d`
+2. `vault operator init` (store the unseal keys/root token safely) and `vault operator unseal` twice
+3. `cd automation/vault/terraform && terraform apply` to enable KV + AppRoles
+4. `vault kv put kv/zeroclaw TELEGRAM_BOT_TOKEN="..." CLOUDFLARED_TUNNEL_TOKEN="..." ZC_API_KEY="..."`
+5. `vault kv put kv/automation tailscale_auth_key="tskey-..."`
+
+### Sync secrets into the workspace
+
+Use the helper script before launching Docker Compose or Terraform:
+
+```powershell
+cd automation
+pwsh ./scripts/sync-vault-secrets.ps1 `
+    -UseAppRole `
+    -RoleIdFile ./vault/.approle/zeroclaw-runtime-role-id `
+    -SecretIdFile ./vault/.approle/zeroclaw-runtime-secret-id `
+    -UseAutomationAppRole `
+    -AutomationRoleIdFile ./vault/.approle/automation-terraform-role-id `
+    -AutomationSecretIdFile ./vault/.approle/automation-terraform-secret-id
+```
+
+Results:
+
+- Writes `zeroclaw/deploy/secure-stack/.env` with every key stored under `kv/zeroclaw`
+- Exports `TF_VAR_tailscale_auth_key` from `kv/automation`
+- Runs Terraform for you if you append `-TerraformArgs @('plan')`
+
+If you already have a local `vault login`, the script will reuse `~/.vault-token`, so the AppRole files are optional.
+
 ## Auto-pair the secure gateway
 
 When the ZeroClaw gateway container restarts it prints a single-use pairing code and expects the first client to `POST /pair` with the `X-Pairing-Code` header. The helper script automates that flow:
