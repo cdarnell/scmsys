@@ -1,25 +1,31 @@
-<<<<<<< HEAD
-# automation
-Align home stack and claws
-=======
-# OCI Automation Helpers
+automation/
+automation/
+# Automation
 
-This mini-project keeps a repeatable Terraform plan plus a bash loop that repeatedly applies the plan until Oracle Cloud Infrastructure (OCI) finally has enough Ampere A1 capacity. The workflow is designed to run inside OCI Cloud Shell so you do not need to keep your Windows workstation awake while OCI is "out of capacity".
+Align home stack and claws. This repo glues together the ZeroClaw runtime, the observability stack, and the Oracle Cloud automation helpers so the entire environment can be reproduced (and secured) on demand.
 
 ## Repo Layout
 
 ```
-automation/
+SCMSYS/projects/automation/
 ├── README.md                  # You are here
-├── terraform/                 # Terraform config for a single A1 Flex instance
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-└── scripts/
-    └── retry-terraform.sh     # Bash loop that keeps running terraform apply
+├── zeroclaw/                  # Upstream ZeroClaw runtime and docs snapshot
+├── observability-stack/       # Prometheus + Grafana (Docker compose)
+├── terraform/                 # OCI IaC for an Ampere A1 Flex host
+└── scripts/                   # Helper scripts (retry loop, bootstrap, etc.)
 ```
 
-## Prerequisites
+## Components at a Glance
+
+- **ZeroClaw** – Canonical source tree plus deploy helpers so agents stay reproducible.
+- **Observability Stack** – Docker Compose bundle with Prometheus, Grafana, dashboards for ZeroClaw/Ollama/Windows exporters, and provisioning rules baked in.
+- **OCI Automation Helpers** – Terraform + cloud-init + a retry loop that keep nudging OCI until free-tier Ampere capacity appears, hardened with NSGs and optional Tailscale bootstrap.
+
+## OCI Automation Helpers
+
+This mini-project keeps a repeatable Terraform plan plus a bash loop that repeatedly applies the plan until Oracle Cloud Infrastructure (OCI) finally has enough Ampere A1 capacity. The workflow is designed to run inside OCI Cloud Shell so you do not need to keep your Windows workstation awake while OCI is "out of capacity".
+
+### Prerequisites
 
 1. **Terraform 1.6+** (already installed in OCI Cloud Shell).
 2. **OCI credentials**: Cloud Shell inherits them. If running locally, configure `oci` CLI or provide a config file/instance principal.
@@ -29,39 +35,6 @@ automation/
    - Availability Domain name (e.g., `kIdk:US-ASHBURN-AD-1`)
    - Image OCID for your preferred ARM build (Oracle Linux 8/9 ARM or Ubuntu 22.04 ARM)
    - SSH public key text
-4. **Optional**: Capacity Reservation OCID if you successfully pre-reserved the A1 cores.
-
-# Automation
-Align home stack and claws. This repo glues together ZeroClaw, observability, and Oracle Cloud automation so the entire environment can be reproduced (and secured) on demand.
-
-## OCI Automation Helpers
-
-Terraform stands up a free-tier friendly Ampere A1 instance, while the bundled retry script keeps hammering `terraform apply` until OCI capacity frees up.
-
-### Repo Layout
-
-```
-automation/
-├── README.md                  # You are here
-├── terraform/                 # Terraform config for a single A1 Flex instance
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── terraform/cloud-init/      # Hardened cloud-init templates (Tailscale, UFW)
-└── scripts/
-     └── retry-terraform.sh     # Bash loop that keeps running terraform apply
-```
-
-### Prerequisites
-
-1. **Terraform 1.6+** (already installed in OCI Cloud Shell).
-2. **OCI credentials**: Cloud Shell inherits them. If running locally, configure `oci` CLI or provide a config file/instance principal.
-3. **Values for:**
-    - Compartment OCID
-    - Subnet OCID (regional or AD-specific)
-    - Availability Domain name (e.g., `kIdk:US-ASHBURN-AD-1`)
-    - Image OCID for your preferred ARM build (Oracle Linux 8/9 ARM or Ubuntu 22.04 ARM)
-    - SSH public key text
 4. **Optional**: Capacity Reservation OCID if you successfully pre-reserved the A1 cores.
 
 ### Quick Start (Cloud Shell)
@@ -114,7 +87,7 @@ INTERVAL=30 MAX_ATTEMPTS=120 ./scripts/retry-terraform.sh
 
 ## Hardened access (Firewall + Tailscale)
 
-The Terraform plan now creates a dedicated Network Security Group (NSG) per instance and ships a hardened cloud-init profile that can auto-enroll the VM into your Tailscale tailnet.
+The Terraform plan creates a dedicated Network Security Group (NSG) per instance and ships a hardened cloud-init profile that can auto-enroll the VM into your Tailscale tailnet.
 
 - **NSG defaults**: inbound SSH is restricted to the Tailscale CGNAT range (`100.64.0.0/10`) and UDP/41641 is the only other port exposed publicly (needed for Tailscale DERP/NAT traversal). Override `allowed_ssh_cidrs`/`allowed_tailscale_udp_cidrs` if you need temporary access from a bastion.
 - **Cloud-init**: set `enable_tailscale=true` and provide an ephemeral `tailscale_auth_key` (never commit it!). The template installs Tailscale, enables UFW with a deny-all policy, allows only loopback + `tailscale0`, opens SSH for tailnet peers, and turns on `tailscale up --ssh` with your chosen tags/routes.
@@ -136,3 +109,5 @@ The Terraform plan now creates a dedicated Network Security Group (NSG) per inst
 4. Use `tailscale ssh ubuntu@<tailnet-ip>` (or whichever user you create) and let ZeroClaw reach Telegram/OpenAI over the tunnel.
 
 > **Tip:** Add your workstation’s public IP to `allowed_ssh_cidrs` only when you need a break-glass path; remove it once Tailscale access is verified.
+
+INTERVAL=30 MAX_ATTEMPTS=120 ./scripts/retry-terraform.sh
