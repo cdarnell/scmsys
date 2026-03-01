@@ -1,0 +1,119 @@
+version: "3.9"
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: observability-prometheus
+    restart: unless-stopped
+    depends_on:
+      - vector
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - metrics_backplane
+      - metrics_publishers
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: observability-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    networks:
+      - metrics_backplane
+      - metrics_publishers
+
+  vector:
+    image: timberio/vector:0.42.0-alpine
+    container_name: observability-vector
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      VECTOR_LOG: info
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - vector-data:/var/lib/vector
+    ports:
+      - "6000:6000"
+    expose:
+      - "9598"
+      - "8686"
+    networks:
+      - metrics_backplane
+      - metrics_publishers
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: observability-loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/config.yml"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    networks:
+      - metrics_backplane
+      - metrics_publishers
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: observability-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro
+    networks:
+      - metrics_backplane
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: observability-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - metrics_backplane
+
+networks:
+  metrics_backplane:
+    external: true
+    name: secure-stack_zeroclaw_internal
+  metrics_publishers:
+    external: true
+    name: metrics_network
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  vector-data:

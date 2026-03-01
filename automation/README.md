@@ -20,6 +20,7 @@ SCMSYS/
 - **ZeroClaw** – Canonical source tree now lives in the sibling folder `SCMSYS/zeroclaw` so the upstream runtime is versioned independently while still kept in this repo.
 - **Observability Stack** – Docker Compose bundle with Prometheus, Grafana, dashboards for ZeroClaw/Ollama/Windows exporters, and provisioning rules baked in.
 - **OCI Automation Helpers** – Terraform + cloud-init + a retry loop that keep nudging OCI until free-tier Ampere capacity appears, hardened with NSGs and optional Tailscale bootstrap.
+- **Gateway Utilities** – `scripts/auto-pair-gateway.ps1` inspects the secure stack gateway, fetches the most recent pairing code, and automatically pairs a client (returning the bearer token for you).
 
 ## OCI Automation Helpers
 
@@ -111,3 +112,19 @@ The Terraform plan creates a dedicated Network Security Group (NSG) per instance
 > **Tip:** Add your workstation’s public IP to `allowed_ssh_cidrs` only when you need a break-glass path; remove it once Tailscale access is verified.
 
 INTERVAL=30 MAX_ATTEMPTS=120 ./scripts/retry-terraform.sh
+
+## Auto-pair the secure gateway
+
+When the ZeroClaw gateway container restarts it prints a single-use pairing code and expects the first client to `POST /pair` with the `X-Pairing-Code` header. The helper script automates that flow:
+
+```powershell
+cd $env:USERPROFILE\projects\automation\SCMSYS\automation
+./scripts/auto-pair-gateway.ps1 -ClientName "zeroclaw_cli" -ClientContact "charl@local"
+```
+
+What it does:
+- Calls the gateway health endpoint (via `docker compose exec gateway curl …`) to see if pairing is still required.
+- Scrapes the latest pairing code from `docker compose logs gateway` (looks for `Send: POST /pair with header X-Pairing-Code: <code>`).
+- Issues the pairing request from inside the container and prints the returned bearer token (optionally writes it to `-TokenOutFile`).
+
+Use `-StackPath` if your secure stack lives somewhere else, and `-Force` if you intentionally cleared the existing paired tokens and want to re-run the workflow immediately.

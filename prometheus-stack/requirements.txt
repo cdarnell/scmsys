@@ -1,0 +1,7 @@
+pydantic
+pydantic-settings
+requests
+prometheus_client
+
+# Dev/test
+pytest

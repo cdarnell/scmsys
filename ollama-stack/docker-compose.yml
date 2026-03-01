@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_PORT: 11434
+      OLLAMA_METRICS_PORT: 11439
+      OLLAMA_ORIGINS: "*"
+    ports:
+      - "11435:11434"  # public API
+      - "11439:11439"  # Prometheus metrics
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - metrics_publishers
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:11434/api/tags >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  metrics_publishers:
+    external: true
+    name: metrics_network
+
+volumes:
+  ollama-models:

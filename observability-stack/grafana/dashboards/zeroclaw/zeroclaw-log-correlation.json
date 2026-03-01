@@ -1,0 +1,197 @@
+{
+  "uid": "zeroclaw-log-correlation",
+  "title": "ZeroClaw Log Correlation",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log Events per Second",
+      "id": 1,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(observability_zeroclaw_log_events_total{container=~\"$container\", level=~\"$level\"}[5m])) by (container, level)",
+          "legendFormat": "{{container}} · {{level}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "links": [
+            {
+              "title": "View container logs",
+              "targetBlank": true,
+              "url": "/explore?left=%5B%22now-15m%22,%22now%22,%22Loki%22,%7B%22expr%22:%22%7Bcontainer%3D\\\"${__field.labels.container}\\\"%7D%22%7D%5D"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Bursts",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(observability_zeroclaw_log_errors_total{container=~\"$container\"}[5m])) by (container)",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineInterpolation": "smooth",
+            "lineWidth": 0,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "links": [
+            {
+              "title": "View container logs",
+              "targetBlank": true,
+              "url": "/explore?left=%5B%22now-30m%22,%22now%22,%22Loki%22,%7B%22expr%22:%22%7Bcontainer%3D\\\"${__field.labels.container}\\\"%2Clevel%3D~\\\"error|fatal\\\"%7D%22%7D%5D"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent Error Spikes",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, increase(observability_zeroclaw_log_errors_total{container=~\"$container\"}[30m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Container Logs",
+      "id": 4,
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"zeroclaw\",container=~\"$container\",level=~\"$level\"}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "wrapLogMessage": true
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(observability_zeroclaw_log_events_total, container)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 1,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "level",
+        "type": "custom",
+        "includeAll": true,
+        "allValue": ".*",
+        "query": "debug,info,warn,error,fatal",
+        "current": {
+          "selected": true,
+          "text": "warn +",
+          "value": "warn|error|fatal"
+        },
+        "options": [
+          { "text": "debug", "value": "debug", "selected": false },
+          { "text": "info", "value": "info", "selected": false },
+          { "text": "warn", "value": "warn", "selected": false },
+          { "text": "error", "value": "error", "selected": false },
+          { "text": "fatal", "value": "fatal", "selected": false }
+        ]
+      }
+    ]
+  }
+}

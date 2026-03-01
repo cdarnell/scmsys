@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tesla-token-bootstrap-test
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        job: tesla-token-bootstrap-test
+    spec:
+      serviceAccountName: tesla-collector-sa
+      restartPolicy: Never
+      containers:
+        - name: bootstrap-test
+          image: python:3.11-slim
+          command: ["/bin/sh", "-c", "python - <<'PY'\nprint('bootstrap test: OK')\nPY\n"]
+          env:
+            - name: TESLA_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: tesla-credentials
+                  key: client_id
+            - name: TESLA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tesla-credentials
+                  key: client_secret
