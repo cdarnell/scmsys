@@ -88,6 +88,24 @@ variable "assign_ipv6_ip" {
   default     = false
 }
 
+variable "enable_network_security_group" {
+  description = "Create a dedicated NSG and attach it to the instance VNIC."
+  type        = bool
+  default     = true
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDR ranges allowed to reach SSH over the public interface (defaults to Tailscale CGNAT range)."
+  type        = list(string)
+  default     = ["100.64.0.0/10"]
+}
+
+variable "allowed_tailscale_udp_cidrs" {
+  description = "CIDR ranges allowed to hit the Tailscale UDP port (set to 0.0.0.0/0 for NAT traversal)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "capacity_reservation_id" {
   description = "Existing capacity reservation OCID (optional)."
   type        = string
@@ -122,4 +140,35 @@ variable "freeform_tags" {
   description = "Optional freeform tags map."
   type        = map(string)
   default     = {}
+}
+
+variable "enable_tailscale" {
+  description = "Render a secure cloud-init profile that installs and enrolls Tailscale."
+  type        = bool
+  default     = false
+}
+
+variable "tailscale_auth_key" {
+  description = "Ephemeral auth key created via https://login.tailscale.com/admin/settings/keys."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "tailscale_tags" {
+  description = "Optional Tailscale ACL tags to advertise on the node."
+  type        = list(string)
+  default     = []
+}
+
+variable "tailscale_advertise_routes" {
+  description = "CIDR routes (if any) this node should advertise to the tailnet."
+  type        = list(string)
+  default     = []
+}
+
+variable "tailscale_ssh" {
+  description = "Enable Tailscale SSH for this node."
+  type        = bool
+  default     = true
 }

@@ -1,0 +1,30 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - ufw
+  - curl
+  - ca-certificates
+runcmd:
+  - sh -c "curl -fsSL https://tailscale.com/install.sh | sh"
+  - systemctl enable --now tailscaled
+  - |
+    tailscale up \
+      --authkey "${tailscale_auth_key}" \
+      --hostname "${tailscale_hostname}" \
+      --ssh ${tailscale_ssh_flag} \
+      --accept-dns=true \
+      --accept-routes=${tailscale_accept_routes} \
+      ${tailscale_tag_arg} \
+      ${tailscale_routes_arg}
+  - ufw --force reset
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow in on lo
+  - ufw allow in on tailscale0
+%{ for cidr in allowed_ssh_cidrs ~}
+  - ufw allow proto tcp from ${cidr} to any port 22
+%{ endfor ~}
+  - ufw allow proto udp from any to any port 41641
+  - ufw allow out to 0.0.0.0/0
+  - ufw --force enable

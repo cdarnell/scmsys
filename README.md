@@ -31,7 +31,40 @@ automation/
    - SSH public key text
 4. **Optional**: Capacity Reservation OCID if you successfully pre-reserved the A1 cores.
 
-## Quick Start (Cloud Shell)
+# Automation
+Align home stack and claws. This repo glues together ZeroClaw, observability, and Oracle Cloud automation so the entire environment can be reproduced (and secured) on demand.
+
+## OCI Automation Helpers
+
+Terraform stands up a free-tier friendly Ampere A1 instance, while the bundled retry script keeps hammering `terraform apply` until OCI capacity frees up.
+
+### Repo Layout
+
+```
+automation/
+├── README.md                  # You are here
+├── terraform/                 # Terraform config for a single A1 Flex instance
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── terraform/cloud-init/      # Hardened cloud-init templates (Tailscale, UFW)
+└── scripts/
+     └── retry-terraform.sh     # Bash loop that keeps running terraform apply
+```
+
+### Prerequisites
+
+1. **Terraform 1.6+** (already installed in OCI Cloud Shell).
+2. **OCI credentials**: Cloud Shell inherits them. If running locally, configure `oci` CLI or provide a config file/instance principal.
+3. **Values for:**
+    - Compartment OCID
+    - Subnet OCID (regional or AD-specific)
+    - Availability Domain name (e.g., `kIdk:US-ASHBURN-AD-1`)
+    - Image OCID for your preferred ARM build (Oracle Linux 8/9 ARM or Ubuntu 22.04 ARM)
+    - SSH public key text
+4. **Optional**: Capacity Reservation OCID if you successfully pre-reserved the A1 cores.
+
+### Quick Start (Cloud Shell)
 
 ```bash
 # 1) Clone or upload the automation folder
@@ -66,7 +99,7 @@ cd ~/projects/automation
 
 The script will call `terraform apply -auto-approve` every 60 seconds until it succeeds. When OCI finally has spare capacity (or your reservation kicks in), the apply exits 0 and the loop stops.
 
-## Customizing the Loop
+### Customizing the Loop
 
 `retry-terraform.sh` honors two environment variables:
 
@@ -79,14 +112,27 @@ Example:
 INTERVAL=30 MAX_ATTEMPTS=120 ./scripts/retry-terraform.sh
 ```
 
-## Cleanup
+## Hardened access (Firewall + Tailscale)
 
-When you're done with the VM:
+The Terraform plan now creates a dedicated Network Security Group (NSG) per instance and ships a hardened cloud-init profile that can auto-enroll the VM into your Tailscale tailnet.
 
-```bash
-cd automation/terraform
-terraform destroy -auto-approve
-```
+- **NSG defaults**: inbound SSH is restricted to the Tailscale CGNAT range (`100.64.0.0/10`) and UDP/41641 is the only other port exposed publicly (needed for Tailscale DERP/NAT traversal). Override `allowed_ssh_cidrs`/`allowed_tailscale_udp_cidrs` if you need temporary access from a bastion.
+- **Cloud-init**: set `enable_tailscale=true` and provide an ephemeral `tailscale_auth_key` (never commit it!). The template installs Tailscale, enables UFW with a deny-all policy, allows only loopback + `tailscale0`, opens SSH for tailnet peers, and turns on `tailscale up --ssh` with your chosen tags/routes.
+- **Zero public exposure**: after Tailscale is confirmed you can deploy with `assign_public_ip=false` and reach ZeroClaw/Telegram tooling solely through the tailnet.
 
-That tears down the instance (and frees capacity) but keeps the retry tooling for next time.
->>>>>>> 9cbc933 (feat: init)
+### Tailscale quick start
+
+1. Generate an auth key at https://login.tailscale.com/admin/settings/keys (ephemeral, tagged as needed).
+2. Extend your `oci.auto.tfvars`:
+    ```hcl
+    enable_tailscale           = true
+    tailscale_auth_key         = "tskey-ephemeral-XXXX"
+    tailscale_tags             = ["tag:automation", "tag:zeroclaw"]
+    tailscale_advertise_routes = ["10.42.0.0/24"] # optional
+    allowed_ssh_cidrs          = ["100.64.0.0/10", "100.115.92.0/23"]
+    assign_public_ip           = false
+    ```
+3. `terraform apply` – cloud-init secures the box before any workloads run.
+4. Use `tailscale ssh ubuntu@<tailnet-ip>` (or whichever user you create) and let ZeroClaw reach Telegram/OpenAI over the tunnel.
+
+> **Tip:** Add your workstation’s public IP to `allowed_ssh_cidrs` only when you need a break-glass path; remove it once Tailscale access is verified.
