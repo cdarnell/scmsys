@@ -1,0 +1,88 @@
+# ZeroClaw Docker Compose Example
+# 
+# Quick start:
+#   1. Copy this file and set your API key
+#   2. Run: docker compose up -d
+#   3. Access gateway at http://localhost:3000
+#
+# For more info: https://github.com/zeroclaw-labs/zeroclaw
+
+services:
+  zeroclaw:
+    image: ghcr.io/zeroclaw-labs/zeroclaw:latest
+    # Or build locally:
+    # build: .
+    container_name: zeroclaw
+    restart: unless-stopped
+    
+    environment:
+      # Required: Your LLM provider API key
+      - API_KEY=${API_KEY:-}
+      # Or use the prefixed version:
+      # - ZEROCLAW_API_KEY=${ZEROCLAW_API_KEY:-}
+      
+      # Optional: LLM provider (default: openrouter)
+      # Options: openrouter, openai, anthropic, ollama
+      - PROVIDER=${PROVIDER:-openrouter}
+      
+      # Allow public bind inside Docker (required for container networking)
+      - ZEROCLAW_ALLOW_PUBLIC_BIND=true
+      
+      # Optional: Model override
+      # - ZEROCLAW_MODEL=anthropic/claude-sonnet-4-20250514
+      
+    volumes:
+      # Persist workspace and config (must match WORKDIR/HOME in Dockerfile)
+      - zeroclaw-data:/zeroclaw-data
+      
+    ports:
+      # Gateway API port (override HOST_PORT if 3000 is taken)
+      - "${HOST_PORT:-3000}:3000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Health check — uses lightweight status instead of full diagnostics.
+    # For images with curl, prefer: curl -f http://localhost:3000/health
+    healthcheck:
+      test: ["CMD", "zeroclaw", "status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional Cloudflare Tunnel to keep the gateway off the public internet
+  # while still exposing it to trusted users. Provide CLOUDFLARED_TUNNEL_TOKEN
+  # in your environment or .env file (generated via `cloudflared tunnel token <name>`).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zeroclaw-cloudflared
+    restart: unless-stopped
+    depends_on:
+      zeroclaw:
+        condition: service_started
+    environment:
+      # Optional: token generated via `cloudflared tunnel token <name>` for a named tunnel
+      - CLOUDFLARED_TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN:-}
+      # Default origin the tunnel should reach inside the Docker network
+      - TUNNEL_ORIGIN_URL=${TUNNEL_ORIGIN_URL:-http://zeroclaw:3000}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ -n "$${CLOUDFLARED_TUNNEL_TOKEN}" ]; then
+          exec cloudflared tunnel --no-autoupdate run --token "$${CLOUDFLARED_TUNNEL_TOKEN}"
+        fi
+        echo "⚠️  CLOUDFLARED_TUNNEL_TOKEN not provided — falling back to ephemeral quick tunnel" >&2
+        exec cloudflared tunnel --no-autoupdate --url "$${TUNNEL_ORIGIN_URL}"
+
+volumes:
+  zeroclaw-data:

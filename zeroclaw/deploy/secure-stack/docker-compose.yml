@@ -1,0 +1,149 @@
+version: "3.9"
+
+x-zeroclaw-common: &zeroclaw-common
+  build:
+    context: ../..
+    target: dev
+  image: zeroclaw-secure:latest
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp
+  dns:
+    - 8.8.8.8
+    - 1.1.1.1
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment:
+    RUST_LOG: info
+  user: "65534:65534"
+
+services:
+  gateway:
+    <<: *zeroclaw-common
+    container_name: zeroclaw-gateway
+    command: ["gateway", "--host", "0.0.0.0", "--port", "3000"]
+    volumes:
+      - type: bind
+        source: ./state/gateway
+        target: /zeroclaw-data
+    expose:
+      - "3000"
+    networks:
+      - zeroclaw_internal
+      - zeroclaw_edge
+    healthcheck:
+      test: ["CMD", "zeroclaw", "status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  planner:
+    <<: *zeroclaw-common
+    container_name: zerobot-planner
+    command: ["daemon", "--host", "0.0.0.0", "--port", "3101"]
+    volumes:
+      - type: bind
+        source: ./state/planner
+        target: /zeroclaw-data
+      - type: bind
+        source: ./configs/planner/config.toml
+        target: /zeroclaw-data/.zeroclaw/config.toml
+        read_only: true
+    expose:
+      - "3101"
+    networks:
+      - zeroclaw_internal
+
+  executor:
+    <<: *zeroclaw-common
+    container_name: zerobot-executor
+    command: ["daemon", "--host", "0.0.0.0", "--port", "3102"]
+    volumes:
+      - type: bind
+        source: ./state/executor
+        target: /zeroclaw-data
+      - type: bind
+        source: ./configs/executor/config.toml
+        target: /zeroclaw-data/.zeroclaw/config.toml
+        read_only: true
+    expose:
+      - "3102"
+    networks:
+      - zeroclaw_internal
+
+  memory:
+    <<: *zeroclaw-common
+    container_name: zerobot-memory
+    command: ["daemon", "--host", "0.0.0.0", "--port", "3103"]
+    volumes:
+      - type: bind
+        source: ./state/memory
+        target: /zeroclaw-data
+      - type: bind
+        source: ./configs/memory/config.toml
+        target: /zeroclaw-data/.zeroclaw/config.toml
+        read_only: true
+    expose:
+      - "3103"
+    networks:
+      - zeroclaw_internal
+
+  telegram-channel:
+    <<: *zeroclaw-common
+    container_name: zeroclaw-telegram
+    command: ["channel", "start"]
+    volumes:
+      - type: bind
+        source: ./state/telegram
+        target: /zeroclaw-data
+      - type: bind
+        source: ./configs/telegram/config.toml
+        target: /zeroclaw-data/.zeroclaw/config.toml
+        read_only: true
+    depends_on:
+      - gateway
+    networks:
+      - zeroclaw_internal
+      - zeroclaw_edge
+
+  reverse-proxy:
+    image: traefik:3.1
+    container_name: zeroclaw-proxy
+    command: ["--configFile=/etc/traefik/traefik.yml"]
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    expose:
+      - "9100"
+    volumes:
+      - type: bind
+        source: ./configs/traefik/traefik.yml
+        target: /etc/traefik/traefik.yml
+        read_only: true
+      - type: bind
+        source: ./configs/traefik/dynamic.yml
+        target: /etc/traefik/dynamic/dynamic.yml
+        read_only: true
+      - type: bind
+        source: ./certs
+        target: /certs
+        read_only: true
+    depends_on:
+      - gateway
+      - planner
+      - executor
+      - memory
+    networks:
+      - zeroclaw_internal
+      - zeroclaw_edge
+
+networks:
+  zeroclaw_internal:
+    driver: bridge
+  zeroclaw_edge:
+    driver: bridge

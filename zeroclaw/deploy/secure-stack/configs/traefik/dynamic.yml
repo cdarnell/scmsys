@@ -1,0 +1,67 @@
+http:
+  routers:
+    gateway:
+      rule: "Host(`gateway.localhost`)"
+      entryPoints:
+        - websecure
+      service: gateway
+      tls:
+        options: mtls@file
+    planner:
+      rule: "Host(`planner.localhost`)"
+      entryPoints:
+        - websecure
+      service: planner
+      tls:
+        options: mtls@file
+    executor:
+      rule: "Host(`executor.localhost`)"
+      entryPoints:
+        - websecure
+      service: executor
+      tls:
+        options: mtls@file
+    memory:
+      rule: "Host(`memory.localhost`)"
+      entryPoints:
+        - websecure
+      service: memory
+      tls:
+        options: mtls@file
+
+  services:
+    gateway:
+      loadBalancer:
+        servers:
+          - url: "http://gateway:3000"
+    planner:
+      loadBalancer:
+        servers:
+          - url: "http://planner:3101"
+    executor:
+      loadBalancer:
+        servers:
+          - url: "http://executor:3102"
+    memory:
+      loadBalancer:
+        servers:
+          - url: "http://memory:3103"
+
+tls:
+  certificates:
+    - certFile: /certs/gateway-fullchain.pem
+      keyFile: /certs/gateway.key
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/gateway-fullchain.pem
+        keyFile: /certs/gateway.key
+  options:
+    mtls:
+      clientAuth:
+        caFiles:
+          - /certs/root-ca.pem
+          - /certs/issuing-ca.pem
+        clientAuthType: RequireAndVerifyClientCert

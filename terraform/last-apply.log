@@ -1,0 +1,8 @@
+Γò╖
+Γöé Error: can not create client, bad configuration: did not find a proper configuration for tenancy
+Γöé 
+Γöé   with provider["registry.terraform.io/oracle/oci"],
+Γöé   on main.tf line 12, in provider "oci":
+Γöé   12: provider "oci" {
+Γöé 
+Γò╡

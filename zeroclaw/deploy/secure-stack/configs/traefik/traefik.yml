@@ -1,0 +1,28 @@
+entryPoints:
+  websecure:
+    address: ":443"
+  metrics:
+    address: ":9100"
+
+log:
+  level: INFO
+
+accessLog: {}
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/gateway-fullchain.pem
+        keyFile: /certs/gateway.key
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true

@@ -1,0 +1,54 @@
+/target
+firmware/*/target
+*.db
+*.db-journal
+.DS_Store
+._*
+.wt-pr37/
+__pycache__/
+*.pyc
+docker-compose.override.yml
+
+# Environment files (may contain secrets)
+.env
+
+# Python virtual environments
+
+.venv/
+venv/
+
+# ESP32 build cache (esp-idf-sys managed)
+
+.embuild/
+.env.local
+.env.*.local
+
+# Secret keys and credentials
+.secret_key
+*.key
+*.pem
+*.pfx
+*.p12
+credentials.json
+.worktrees/
+
+# SQLite WAL artifacts
+*.db-shm
+*.db-wal
+
+# zeroclaw deploy — secrets and runtime state
+deploy/secure-stack/certs/
+deploy/secure-stack/configs/executor/config.toml
+deploy/secure-stack/configs/gateway/config.toml
+deploy/secure-stack/configs/memory/config.toml
+deploy/secure-stack/configs/planner/config.toml
+deploy/secure-stack/configs/telegram/config.toml
+deploy/secure-stack/state/**/.zeroclaw/config.toml
+deploy/secure-stack/state/**/.zeroclaw/daemon_state.json
+deploy/secure-stack/state/**/memory/brain.db-shm
+deploy/secure-stack/state/**/memory/brain.db-wal
+deploy/secure-stack/state/**/state/memory_hygiene_state.json
+deploy/secure-stack/state/**/workspace/IDENTITY.md
+deploy/secure-stack/curl-pair.txt
+deploy/secure-stack/curl-test.txt
+deploy/secure-stack/zeroclaw-bin
